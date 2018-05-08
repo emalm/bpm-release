@@ -95,17 +95,14 @@ func (*RuncClient) CreateBundle(
 	return enc.Encode(&jobSpec)
 }
 
-func (c *RuncClient) RunContainer(pidFilePath, bundlePath, containerID string, stdout, stderr io.Writer) error {
-	runcCmd := exec.Command(
-		c.runcPath,
-		"--root", c.runcRoot,
-		"run",
-		"--bundle", bundlePath,
-		"--pid-file", pidFilePath,
-		"--detach",
-		containerID,
-	)
+func (c *RuncClient) RunContainer(pidFilePath, bundlePath, containerID string, foreground bool, stdout, stderr io.Writer) error {
+	args := []string{"--root", c.runcRoot, "run", "--bundle", bundlePath}
+	if !foreground {
+		args = append(args, "--pid-file", pidFilePath, "--detach")
+	}
+	args = append(args, containerID)
 
+	runcCmd := exec.Command(c.runcPath, args...)
 	runcCmd.Stdout = stdout
 	runcCmd.Stderr = stderr
 

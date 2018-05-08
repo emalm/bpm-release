@@ -121,7 +121,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 
 	Describe("StartProcess", func() {
 		It("builds the runc spec, bundle, and runs the container", func() {
-			err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+			err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(fakeUserFinder.LookupCallCount()).To(Equal(1))
@@ -146,10 +146,11 @@ var _ = Describe("RuncJobLifecycle", func() {
 			Expect(user).To(Equal(expectedUser))
 
 			Expect(fakeRuncClient.RunContainerCallCount()).To(Equal(1))
-			pidFilePath, bundlePath, cid, stdout, stderr := fakeRuncClient.RunContainerArgsForCall(0)
+			pidFilePath, bundlePath, cid, foreground, stdout, stderr := fakeRuncClient.RunContainerArgsForCall(0)
 			Expect(pidFilePath).To(Equal(bpmCfg.PidFile()))
 			Expect(bundlePath).To(Equal(filepath.Join(expectedSystemRoot, "data", "bpm", "bundles", expectedJobName, expectedProcName)))
 			Expect(cid).To(Equal(expectedContainerID))
+			Expect(foreground).To(BeFalse())
 			Expect(stdout).To(Equal(expectedStdout))
 			Expect(stderr).To(Equal(expectedStderr))
 		})
@@ -162,7 +163,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 			})
 
 			It("executes the pre start hook", func() {
-				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				expectedCommand := exec.Command(procCfg.Hooks.PreStart)
@@ -180,7 +181,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 				})
 
 				It("returns an error", func() {
-					err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+					err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 					Expect(err).To(HaveOccurred())
 				})
 			})
@@ -194,7 +195,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 			})
 
 			It("ignores the pre start hook", func() {
-				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -205,11 +206,11 @@ var _ = Describe("RuncJobLifecycle", func() {
 			})
 
 			It("simplifies the container ID", func() {
-				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(fakeRuncClient.RunContainerCallCount()).To(Equal(1))
-				_, _, cid, _, _ := fakeRuncClient.RunContainerArgsForCall(0)
+				_, _, cid, _, _, _ := fakeRuncClient.RunContainerArgsForCall(0)
 				Expect(cid).To(Equal(config.Encode(expectedJobName)))
 			})
 		})
@@ -220,7 +221,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 			})
 
 			It("returns an error", func() {
-				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -231,7 +232,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 			})
 
 			It("returns an error", func() {
-				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -242,7 +243,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 			})
 
 			It("returns an error", func() {
-				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -253,7 +254,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 			})
 
 			It("returns an error", func() {
-				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 				Expect(err).To(HaveOccurred())
 			})
 		})
@@ -264,7 +265,7 @@ var _ = Describe("RuncJobLifecycle", func() {
 			})
 
 			It("returns an error", func() {
-				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg)
+				err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false)
 				Expect(err).To(HaveOccurred())
 			})
 		})

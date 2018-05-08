@@ -75,7 +75,7 @@ type RuncAdapter interface {
 
 type RuncClient interface {
 	CreateBundle(bundlePath string, jobSpec specs.Spec, user specs.User) error
-	RunContainer(pidFilePath, bundlePath, containerID string, stdout, stderr io.Writer) error
+	RunContainer(pidFilePath, bundlePath, containerID string, foreground bool, stdout, stderr io.Writer) error
 	Exec(containerID, command string, stdin io.Reader, stdout, stderr io.Writer) error
 	ContainerState(containerID string) (*specs.State, error)
 	ListContainers() ([]client.ContainerState, error)
@@ -108,7 +108,7 @@ func NewRuncLifecycle(
 	}
 }
 
-func (j *RuncLifecycle) StartProcess(logger lager.Logger, bpmCfg *config.BPMConfig, procCfg *config.ProcessConfig) error {
+func (j *RuncLifecycle) StartProcess(logger lager.Logger, bpmCfg *config.BPMConfig, procCfg *config.ProcessConfig, foreground bool) error {
 	logger = logger.Session("start-process")
 	logger.Info("starting")
 	defer logger.Info("complete")
@@ -150,13 +150,22 @@ func (j *RuncLifecycle) StartProcess(logger lager.Logger, bpmCfg *config.BPMConf
 		}
 	}
 
+	var procStdout io.Writer = stdout
+	var procStderr io.Writer = stderr
+
+	if foreground {
+		procStdout = io.MultiWriter(stdout, os.Stdout)
+		procStderr = io.MultiWriter(stderr, os.Stderr)
+	}
+
 	logger.Info("running-container")
 	return j.runcClient.RunContainer(
 		bpmCfg.PidFile(),
 		bpmCfg.BundlePath(),
 		bpmCfg.ContainerID(),
-		stdout,
-		stderr,
+		foreground,
+		procStdout,
+		procStderr,
 	)
 }
 

@@ -41,3 +41,5 @@ agent_port=1337
 pushd "${GOPATH}/src/bpm/acceptance" > /dev/null
   ginkgo -r -p -race -randomizeAllSpecs -- --agent-uri="http://${AGENT_HOST}:${agent_port}"
 popd > /dev/null
+
+bosh run-errand test-errand

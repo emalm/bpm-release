@@ -15,6 +15,17 @@ jobs:
     release: bpm
   - name: test-server
     release: bpm
+- instances: 1
+  name: bpm-errand
+  lifecycle: errand
+  resource_pool: bpm
+  networks:
+  - name: bpm
+  templates:
+  - name: bpm
+    release: bpm
+  - name: test-errand
+    release: bpm
 name: bpm
 networks:
 - name: bpm

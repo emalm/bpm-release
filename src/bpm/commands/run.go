@@ -26,38 +26,38 @@ import (
 )
 
 func init() {
-	startCommand.Flags().StringVarP(&procName, "process", "p", "", "The optional process name.")
-	RootCmd.AddCommand(startCommand)
+	runCommand.Flags().StringVarP(&procName, "process", "p", "", "The optional process name.")
+	RootCmd.AddCommand(runCommand)
 }
 
-var startCommand = &cobra.Command{
-	Long:     "Starts a BOSH Process",
-	RunE:     start,
-	Short:    "Starts a BOSH Process",
-	Use:      "start <job-name>",
-	PreRunE:  startPre,
-	PostRunE: startPost,
+var runCommand = &cobra.Command{
+	Long:     "runs a bosh process synchronously",
+	RunE:     run,
+	Short:    "runs a bosh process synchronously",
+	Use:      "run <job-name>",
+	PreRunE:  runPre,
+	PostRunE: runPost,
 }
 
-func startPre(cmd *cobra.Command, args []string) error {
+func runPre(cmd *cobra.Command, args []string) error {
 	if err := validateInput(args); err != nil {
 		return err
 	}
 
 	cmd.SilenceUsage = true
 
-	if err := setupBpmLogs("start"); err != nil {
+	if err := setupBpmLogs("run"); err != nil {
 		return err
 	}
 
 	return acquireLifecycleLock()
 }
 
-func startPost(cmd *cobra.Command, args []string) error {
+func runPost(cmd *cobra.Command, args []string) error {
 	return releaseLifecycleLock()
 }
 
-func start(cmd *cobra.Command, _ []string) error {
+func run(cmd *cobra.Command, _ []string) error {
 	logger.Info("starting")
 	defer logger.Info("complete")
 
@@ -97,7 +97,7 @@ func start(cmd *cobra.Command, _ []string) error {
 		}
 		fallthrough
 	default:
-		if err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, false); err != nil {
+		if err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, true); err != nil {
 			return fmt.Errorf("failed to start job-process: %s", err)
 		}
 	}

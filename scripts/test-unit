@@ -21,6 +21,7 @@ pushd "${GOPATH}" > /dev/null
 
   pushd "src/bpm" > /dev/null
     go generate ./...
+    go install ./cmd/bpm
     ginkgo -r -p -race -randomizeAllSpecs -skipPackage "acceptance" "$@"
   popd > /dev/null
 popd

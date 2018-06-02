@@ -16,81 +16,125 @@
 package integration2_test
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/onsi/gomega/gexec"
 )
 
-func TestRun(t *testing.T) {
-	s, err := NewSandbox()
-	if err != nil {
-		t.Fatalf("sandbox setup failed: %v", err)
+var runcExe = flag.String("runcExe", "/var/vcap/packages/bpm/bin/runc", "path to the runc executable")
+var bpmExe = flag.String("bpmExe", "", "path to bpm executable")
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+
+	// build bpm if not testing an existing binary
+	if *bpmExe == "" {
+		path, err := gexec.Build("bpm/cmd/bpm")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to compile bpm: %v", err)
+			os.Exit(1)
+		}
+		*bpmExe = path
 	}
+
+	os.Exit(m.Run())
+}
+
+func TestRun(t *testing.T) {
+	s := NewSandbox(t)
 	defer s.Cleanup()
 
-	if err := s.Fixture("blah", "testdata/blah.yml"); err != nil {
-		t.Fatalf("couldn't load fixture: %v", err)
-	}
+	s.LoadFixture("errand", "testdata/errand.yml")
 
-	cmd := s.BPMCmd("run", "blah")
+	cmd := s.BPMCmd("run", "errand")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("failed to run bpm: %s", output)
 	}
+
+	if contents, sentinel := string(output), "stdout"; !strings.Contains(contents, sentinel) {
+		t.Errorf("stdout/stderr did not contain %q, contents: %q", sentinel, contents)
+	}
+	if contents, sentinel := string(output), "stderr"; !strings.Contains(contents, sentinel) {
+		t.Errorf("stdout/stderr did not contain %q, contents: %q", sentinel, contents)
+	}
+	stdout, err := ioutil.ReadFile(s.Path("sys", "log", "errand", "errand.stdout.log"))
+	if err != nil {
+		t.Fatalf("failed to read stdout log: %v", err)
+	}
+	if contents, sentinel := string(stdout), "stdout"; !strings.Contains(contents, sentinel) {
+		t.Errorf("stdout log file did not contain %q, contents: %q", sentinel, contents)
+	}
+	stderr, err := ioutil.ReadFile(s.Path("sys", "log", "errand", "errand.stderr.log"))
+	if err != nil {
+		t.Fatalf("failed to read stderr log: %v", err)
+	}
+	if contents, sentinel := string(stderr), "stderr"; !strings.Contains(contents, sentinel) {
+		t.Errorf("stderr log file did not contain %q, contents: %q", sentinel, contents)
+	}
+}
+
+func TestRunFailure(t *testing.T) {
+	s := NewSandbox(t)
+	defer s.Cleanup()
+
+	s.LoadFixture("oops", "testdata/failure.yml")
+
+	if err := s.BPMCmd("run", "oops").Run(); err == nil {
+		t.Fatal("expected command to fail but it did not")
+	}
 }
 
 type Sandbox struct {
+	t *testing.T
+
 	bpmExe  string
 	runcExe string
 
 	root string
 }
 
-const runcExe = "/var/vcap/packages/bpm/bin/runc"
-
-var bpmExe string
-
-func init() {
-	var err error
-	bpmExe, err = gexec.Build("bpm/cmd/bpm")
-	if err != nil {
-		panic(err)
-	}
-}
-
-func NewSandbox() (*Sandbox, error) {
+func NewSandbox(t *testing.T) *Sandbox {
 	root, err := ioutil.TempDir("", "bpm_sandbox")
 	if err != nil {
-		return nil, fmt.Errorf("could not create sandbox root directory: %v", err)
+		t.Fatalf("could not create sandbox root directory: %v", err)
 	}
 
 	paths := []string{
 		filepath.Join(root, "packages", "bpm", "bin"),
 		filepath.Join(root, "data", "packages"),
+		filepath.Join(root, "sys", "log"),
 	}
 
 	for _, path := range paths {
 		if err := os.MkdirAll(path, 0777); err != nil {
-			return nil, fmt.Errorf("could not create sandbox directory structure: %v", err)
+			t.Fatalf("could not create sandbox directory structure: %v", err)
 		}
 	}
 
 	runcSandboxPath := filepath.Join(root, "packages", "bpm", "bin", "runc")
-	if err := os.Symlink(runcExe, runcSandboxPath); err != nil {
-		return nil, fmt.Errorf("could not link runc executable into sandbox: %v", err)
+	if err := os.Symlink(*runcExe, runcSandboxPath); err != nil {
+		t.Fatalf("could not link runc executable into sandbox: %v", err)
 	}
 
 	return &Sandbox{
-		bpmExe:  bpmExe,
-		runcExe: runcExe,
+		t:       t,
+		bpmExe:  *bpmExe,
+		runcExe: *runcExe,
 		root:    root,
-	}, nil
+	}
+}
+
+func (s *Sandbox) Path(fragments ...string) string {
+	return filepath.Join(append([]string{s.root}, fragments...)...)
 }
 
 func (s *Sandbox) BPMCmd(args ...string) *exec.Cmd {
@@ -99,30 +143,28 @@ func (s *Sandbox) BPMCmd(args ...string) *exec.Cmd {
 	return cmd
 }
 
-func (s *Sandbox) Fixture(job, path string) error {
+func (s *Sandbox) LoadFixture(job, path string) {
 	configPath := filepath.Join(s.root, "jobs", job, "config", "bpm.yml")
 
 	if err := os.MkdirAll(filepath.Dir(configPath), 0777); err != nil {
-		return err
+		s.t.Fatalf("failed to create fixture destination directory: %v", err)
 	}
 
 	src, err := os.Open(path)
 	if err != nil {
-		return err
+		s.t.Fatalf("failed to open fixture source: %v", err)
 	}
 	defer src.Close()
 
 	dst, err := os.Create(configPath)
 	if err != nil {
-		return err
+		s.t.Fatalf("failed to open fixture destination: %v", err)
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, src); err != nil {
-		return err
+		s.t.Fatalf("failed to copy fixture to destination: %v", err)
 	}
-
-	return nil
 }
 
 func (s *Sandbox) Cleanup() {

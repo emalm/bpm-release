@@ -98,7 +98,7 @@ func run(cmd *cobra.Command, _ []string) error {
 		fallthrough
 	default:
 		if err := runcLifecycle.StartProcess(logger, bpmCfg, procCfg, true); err != nil {
-			return fmt.Errorf("failed to start job-process: %s", err)
+			return fmt.Errorf("failed to run job-process: %s", err)
 		}
 	}
 

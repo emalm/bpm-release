@@ -24,7 +24,7 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/opencontainers/runtime-spec/specs-go"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 type Signal int
@@ -95,10 +95,10 @@ func (*RuncClient) CreateBundle(
 	return enc.Encode(&jobSpec)
 }
 
-func (c *RuncClient) RunContainer(pidFilePath, bundlePath, containerID string, foreground bool, stdout, stderr io.Writer) error {
-	args := []string{"--root", c.runcRoot, "run", "--bundle", bundlePath}
-	if !foreground {
-		args = append(args, "--pid-file", pidFilePath, "--detach")
+func (c *RuncClient) RunContainer(pidFilePath, bundlePath, containerID string, detach bool, stdout, stderr io.Writer) error {
+	args := []string{"--root", c.runcRoot, "run", "--bundle", bundlePath, "--pid-file", pidFilePath}
+	if detach {
+		args = append(args, "--detach")
 	}
 	args = append(args, containerID)
 

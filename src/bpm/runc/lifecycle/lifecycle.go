@@ -108,34 +108,70 @@ func NewRuncLifecycle(
 	}
 }
 
-func (j *RuncLifecycle) StartProcess(logger lager.Logger, bpmCfg *config.BPMConfig, procCfg *config.ProcessConfig, foreground bool) error {
+func (j *RuncLifecycle) StartProcess(logger lager.Logger, bpmCfg *config.BPMConfig, procCfg *config.ProcessConfig) error {
 	logger = logger.Session("start-process")
 	logger.Info("starting")
 	defer logger.Info("complete")
 
-	user, err := j.userFinder.Lookup(usertools.VcapUser)
+	stdout, stderr, err := j.setupProcess(logger, bpmCfg, procCfg)
 	if err != nil {
 		return err
+	}
+
+	logger.Info("running-container")
+	return j.runcClient.RunContainer(
+		bpmCfg.PidFile(),
+		bpmCfg.BundlePath(),
+		bpmCfg.ContainerID(),
+		true,
+		stdout,
+		stderr,
+	)
+}
+
+func (j *RuncLifecycle) RunProcess(logger lager.Logger, bpmCfg *config.BPMConfig, procCfg *config.ProcessConfig) error {
+	logger = logger.Session("run-process")
+	logger.Info("starting")
+	defer logger.Info("complete")
+
+	stdout, stderr, err := j.setupProcess(logger, bpmCfg, procCfg)
+	if err != nil {
+		return err
+	}
+
+	logger.Info("running-container")
+	return j.runcClient.RunContainer(
+		bpmCfg.PidFile(),
+		bpmCfg.BundlePath(),
+		bpmCfg.ContainerID(),
+		false,
+		io.MultiWriter(stdout, os.Stdout),
+		io.MultiWriter(stderr, os.Stderr),
+	)
+}
+
+func (j *RuncLifecycle) setupProcess(logger lager.Logger, bpmCfg *config.BPMConfig, procCfg *config.ProcessConfig) (io.Writer, io.Writer, error) {
+	user, err := j.userFinder.Lookup(usertools.VcapUser)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	logger.Info("creating-job-prerequisites")
 	stdout, stderr, err := j.runcAdapter.CreateJobPrerequisites(bpmCfg, procCfg, user)
 	if err != nil {
-		return fmt.Errorf("failed to create system files: %s", err.Error())
+		return nil, nil, fmt.Errorf("failed to create system files: %s", err.Error())
 	}
-	defer stdout.Close()
-	defer stderr.Close()
 
 	logger.Info("building-spec")
 	spec, err := j.runcAdapter.BuildSpec(logger, bpmCfg, procCfg, user)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	logger.Info("creating-bundle")
 	err = j.runcClient.CreateBundle(bpmCfg.BundlePath(), spec, user)
 	if err != nil {
-		return fmt.Errorf("bundle build failure: %s", err.Error())
+		return nil, nil, fmt.Errorf("bundle build failure: %s", err.Error())
 	}
 
 	if procCfg.Hooks != nil {
@@ -146,27 +182,11 @@ func (j *RuncLifecycle) StartProcess(logger lager.Logger, bpmCfg *config.BPMConf
 
 		err := j.commandRunner.Run(preStartCmd)
 		if err != nil {
-			return fmt.Errorf("prestart hook failed: %s", err.Error())
+			return nil, nil, fmt.Errorf("prestart hook failed: %s", err.Error())
 		}
 	}
 
-	var procStdout io.Writer = stdout
-	var procStderr io.Writer = stderr
-
-	if foreground {
-		procStdout = io.MultiWriter(stdout, os.Stdout)
-		procStderr = io.MultiWriter(stderr, os.Stderr)
-	}
-
-	logger.Info("running-container")
-	return j.runcClient.RunContainer(
-		bpmCfg.PidFile(),
-		bpmCfg.BundlePath(),
-		bpmCfg.ContainerID(),
-		foreground,
-		procStdout,
-		procStderr,
-	)
+	return stdout, stderr, nil
 }
 
 func (j *RuncLifecycle) StatProcess(cfg *config.BPMConfig) (*models.Process, error) {
